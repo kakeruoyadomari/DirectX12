@@ -22,7 +22,7 @@ int Win32Application::Run(DXSample* pSample, HINSTANCE hInstance, int nCmdShow)
     pSample->ParseCommandLineArgs(argv, argc);
     LocalFree(argv);
 
-    // Initialize the window class.
+    //ウィンドウクラス作成
     WNDCLASSEX windowClass = { 0 };
     windowClass.cbSize = sizeof(WNDCLASSEX);
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
@@ -32,10 +32,11 @@ int Win32Application::Run(DXSample* pSample, HINSTANCE hInstance, int nCmdShow)
     windowClass.lpszClassName = L"DXSampleClass";
     RegisterClassEx(&windowClass);
 
+    // ウィンドウサイズの調整
     RECT windowRect = { 0, 0, static_cast<LONG>(pSample->GetWidth()), static_cast<LONG>(pSample->GetHeight()) };
     AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
-    // Create the window and store a handle to it.
+    // ウィンドウオブジェクトの生成
     m_hwnd = CreateWindow(
         windowClass.lpszClassName,
         pSample->GetTitle(),
@@ -52,9 +53,10 @@ int Win32Application::Run(DXSample* pSample, HINSTANCE hInstance, int nCmdShow)
     // Initialize the sample. OnInit is defined in each child-implementation of DXSample.
     pSample->OnInit();
 
+    //ウィンドウ表示
     ShowWindow(m_hwnd, nCmdShow);
 
-    // Main sample loop.
+    //メインループ
     MSG msg = {};
     while (msg.message != WM_QUIT)
     {
