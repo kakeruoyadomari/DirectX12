@@ -1,121 +1,73 @@
-//*********************************************************
-//
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THIS CODE IS PROVIDED *AS IS* WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING ANY
-// IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR
-// PURPOSE, MERCHANTABILITY, OR NON-INFRINGEMENT.
-//
-//*********************************************************
-
-#include "stdafx.h"
 #include "Win32Application.h"
 
-HWND Win32Application::m_hwnd = nullptr;
-
-int Win32Application::Run(DXSample* pSample, HINSTANCE hInstance, int nCmdShow)
+void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance)
 {
-    // Parse the command line parameters
-    int argc;
-    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    pSample->ParseCommandLineArgs(argv, argc);
-    LocalFree(argv);
+	// ウィンドウクラス生成
+	WNDCLASSEX windowClass = {};
+	windowClass.cbSize = sizeof(WNDCLASSEX);
+	windowClass.style = CS_HREDRAW | CS_VREDRAW;
+	windowClass.lpfnWndProc = WindowProc;
+	windowClass.hInstance = hInstance;
+	windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
+	windowClass.lpszClassName = _T("DXSampleClass");
+	RegisterClassEx(&windowClass);
 
-    //ウィンドウクラス作成
-    WNDCLASSEX windowClass = { 0 };
-    windowClass.cbSize = sizeof(WNDCLASSEX);
-    windowClass.style = CS_HREDRAW | CS_VREDRAW;
-    windowClass.lpfnWndProc = WindowProc;
-    windowClass.hInstance = hInstance;
-    windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-    windowClass.lpszClassName = L"DXSampleClass";
-    RegisterClassEx(&windowClass);
+	// ウィンドウサイズの調整
+	RECT windowRect = { 0, 0, dxApp->GetWindowWidth(), dxApp->GetWindowHeight() };
+	AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, false);
 
-    // ウィンドウサイズの調整
-    RECT windowRect = { 0, 0, static_cast<LONG>(pSample->GetWidth()), static_cast<LONG>(pSample->GetHeight()) };
-    AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
+	// ウィンドウオブジェクトの生成
+	HWND hwnd = CreateWindow(
+		windowClass.lpszClassName,
+		dxApp->GetTitle(),
+		WS_OVERLAPPEDWINDOW,
+		CW_USEDEFAULT,
+		CW_USEDEFAULT,
+		windowRect.right - windowRect.left,
+		windowRect.bottom - windowRect.top,
+		nullptr,
+		nullptr,
+		hInstance,
+		nullptr
+	);
 
-    // ウィンドウオブジェクトの生成
-    m_hwnd = CreateWindow(
-        windowClass.lpszClassName,
-        pSample->GetTitle(),
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        windowRect.right - windowRect.left,
-        windowRect.bottom - windowRect.top,
-        nullptr,        // We have no parent window.
-        nullptr,        // We aren't using menus.
-        hInstance,
-        pSample);
+	// アプリケーション初期化
+	dxApp->OnInit(hwnd);
 
-    // Initialize the sample. OnInit is defined in each child-implementation of DXSample.
-    pSample->OnInit();
+	// ウィンドウ表示
+	ShowWindow(hwnd, SW_SHOW);
 
-    //ウィンドウ表示
-    ShowWindow(m_hwnd, nCmdShow);
+	// メインループ
+	MSG msg = {};
+	while (msg.message != WM_QUIT)
+	{
+		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
 
-    //メインループ
-    MSG msg = {};
-    while (msg.message != WM_QUIT)
-    {
-        // Process any messages in the queue.
-        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
+		// アプリケーション更新
+		dxApp->OnUpdate();
+		dxApp->OnRender();
+	}
 
-    pSample->OnDestroy();
+	// アプリケーション終了
+	dxApp->OnDestroy();
 
-    // Return this part of the WM_QUIT message to Windows.
-    return static_cast<char>(msg.wParam);
+	// クラスを登録解除する
+	UnregisterClass(windowClass.lpszClassName, windowClass.hInstance);
 }
 
-// Main message handler for the sample.
-LRESULT CALLBACK Win32Application::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK Win32Application::WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 {
-    DXSample* pSample = reinterpret_cast<DXSample*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-
-    switch (message)
-    {
-    case WM_CREATE:
-    {
-        // Save the DXSample* passed in to CreateWindow.
-        LPCREATESTRUCT pCreateStruct = reinterpret_cast<LPCREATESTRUCT>(lParam);
-        SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pCreateStruct->lpCreateParams));
-    }
-    return 0;
-
-    case WM_KEYDOWN:
-        if (pSample)
-        {
-            pSample->OnKeyDown(static_cast<UINT8>(wParam));
-        }
-        return 0;
-
-    case WM_KEYUP:
-        if (pSample)
-        {
-            pSample->OnKeyUp(static_cast<UINT8>(wParam));
-        }
-        return 0;
-
-    case WM_PAINT:
-        if (pSample)
-        {
-            pSample->OnUpdate();
-            pSample->OnRender();
-        }
-        return 0;
-
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        return 0;
-    }
-
-    // Handle any messages the switch statement didn't.
-    return DefWindowProc(hWnd, message, wParam, lParam);
+	switch (message)
+	{
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+	default:
+		return DefWindowProc(hwnd, message, wparam, lparam);
+	}
+	return 0;
 }

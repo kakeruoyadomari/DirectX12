@@ -1,29 +1,13 @@
-//*********************************************************
-//
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THIS CODE IS PROVIDED *AS IS* WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING ANY
-// IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR
-// PURPOSE, MERCHANTABILITY, OR NON-INFRINGEMENT.
-//
-//*********************************************************
-
 #pragma once
-
-#include "DXSample.h"
-
-class DXSample;
+#include <windows.h>
+#include <tchar.h>
+#include "DXApplication.h"
 
 class Win32Application
 {
 public:
-    static int Run(DXSample* pSample, HINSTANCE hInstance, int nCmdShow);
-    static HWND GetHwnd() { return m_hwnd; }
-
-protected:
-    static LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	static void Run(DXApplication* dxApp, HINSTANCE hInstance);
 
 private:
-    static HWND m_hwnd;
+	static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
 };
