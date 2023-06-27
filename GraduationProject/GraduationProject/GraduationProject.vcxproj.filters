@@ -46,4 +46,9 @@
     <FxCompile Include="BasicVertexShader.hlsl" />
     <FxCompile Include="BasicPixelShader.hlsl" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="BasicType.hlsli">
+      <Filter>リソース ファイル</Filter>
+    </None>
+  </ItemGroup>
 </Project>

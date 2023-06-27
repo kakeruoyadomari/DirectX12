@@ -1,4 +1,9 @@
-float4 BasicPS() : SV_TARGET
+#include"BasicType.hlsli"
+
+Texture2D g_texture : register(t0);
+SamplerState g_sampler : register(s0);
+
+float4 BasicPS(BasicType input) : SV_TARGET
 {
-    return float4(0.0f, 0.0f, 1.0f, 1.0f);
+    return g_texture.Sample(g_sampler, input.uv);
 }
