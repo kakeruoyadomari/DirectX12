@@ -250,14 +250,34 @@ void DXApplication::LoadAssets()
 		ThrowIfFailed(PrepareUpload(device_.Get(), scratchImg.GetImages(), scratchImg.GetImageCount(), metadata, textureSubresources));
 	}
 
+	//ダミーテクスチャ
+	// テクスチャのロード処理
+	std::vector<UINT8> texture;
+	D3D12_SUBRESOURCE_DATA textureData = {};
+	{
+		// ダミーテクスチャ読込
+		texture = GenerateDummyTextureData();
+		textureData.pData = &texture[0];
+		textureData.RowPitch = kDummyTextureWidth * kDummyTexturePixelSize;
+		textureData.SlicePitch = textureData.RowPitch * kDummyTextureHeight;
+	}
+	//
+
 	// シェーダーリソースビューの生成
 	{
 		// テクスチャバッファの生成
 		D3D12_RESOURCE_DESC textureDesc = {};
 		textureDesc.MipLevels = 1;
 		textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		textureDesc.Width = static_cast<UINT>(metadata.width);
-		textureDesc.Height = static_cast<UINT>(metadata.height);
+
+		//ダミー
+		textureDesc.Width = kDummyTextureWidth;
+		textureDesc.Height = kDummyTextureHeight;
+
+		//てすとテクスチャ
+		//textureDesc.Width = static_cast<UINT>(metadata.width);
+		//textureDesc.Height = static_cast<UINT>(metadata.height);
+
 		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 		textureDesc.DepthOrArraySize = 1;
 		textureDesc.SampleDesc.Count = 1;
@@ -298,7 +318,16 @@ void DXApplication::LoadAssets()
 	// コマンドリストの生成
 	{
 		// テクスチャバッファの転送
-		UpdateSubresources(commandList_.Get(), textureBuffer_.Get(), textureUploadBuffer.Get(), 0, 0, textureSubresources.size(), textureSubresources.data());
+
+		//ダミー
+		UpdateSubresources(commandList_.Get(), textureBuffer_.Get(), textureUploadBuffer.Get(), 0, 0, 1, &textureData);
+		//  
+
+
+		//テストテクスチャ
+		//UpdateSubresources(commandList_.Get(), textureBuffer_.Get(), textureUploadBuffer.Get(), 0, 0, textureSubresources.size(), textureSubresources.data());
+		//
+
 		auto uploadResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(textureBuffer_.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		commandList_->ResourceBarrier(1, &uploadResourceBarrier);
 
@@ -452,4 +481,61 @@ void DXApplication::ThrowIfFailed(HRESULT hr)
 		std::string errMessage = std::string(s_str);
 		throw std::runtime_error(errMessage);
 	}
+}
+
+std::vector<UINT8> GenerateDummyTextureData()
+{
+	const UINT rowPitch = kDummyTextureWidth * kDummyTexturePixelSize;
+	const UINT cellPitch = rowPitch >> 3;
+	const UINT cellHeight = kDummyTextureWidth >> 3;
+	const UINT textureSize = rowPitch * kDummyTextureHeight;
+
+	std::vector<UINT8> data(textureSize);
+	UINT8* pData = &data[0];
+
+	for (UINT n = 0; n < textureSize; n += kDummyTexturePixelSize)
+	{
+		UINT x = n % rowPitch;
+		UINT y = n / rowPitch;
+		UINT i = x / cellPitch;
+		UINT j = y / cellHeight;
+
+		// Sample: 格子状
+		//if (i % 2 == j % 2)
+		//{
+		//	pData[n] = 0x00;
+		//	pData[n + 1] = 0x00;
+		//	pData[n + 2] = 0x00;
+		//	pData[n + 3] = 0xff;
+		//}
+		//else
+		//{
+		//	pData[n] = 0xff;
+		//	pData[n + 1] = 0xff;
+		//	pData[n + 2] = 0xff;
+		//	pData[n + 3] = 0xff;
+		//}
+
+		// Sapmle: グラデーション
+		//float rate = x / static_cast<float>(rowPitch);
+		//UINT dispColor = rate * 256;
+		//pData[n] = dispColor;
+		//pData[n + 1] = dispColor;
+		//pData[n + 2] = dispColor;
+		//pData[n + 3] = 0xff;
+
+		// Sample: ノイズ
+		pData[n] = rand() % 256;
+		pData[n + 1] = rand() % 256;
+		pData[n + 2] = rand() % 256;
+		pData[n + 3] = 255;
+
+	}
+
+
+	for (UINT i = 0; i < 1024; i++)
+	{
+		pData[i] = 255;
+	}
+	return data;
 }

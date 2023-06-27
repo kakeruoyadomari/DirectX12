@@ -19,6 +19,12 @@
 
 using Microsoft::WRL::ComPtr;
 
+// ダミーのテクスチャ情報
+static const UINT kDummyTextureWidth = 256;
+static const UINT kDummyTextureHeight = 256;
+static const UINT kDummyTexturePixelSize = 4;
+std::vector<UINT8> GenerateDummyTextureData();
+
 class DXApplication
 {
 public:
