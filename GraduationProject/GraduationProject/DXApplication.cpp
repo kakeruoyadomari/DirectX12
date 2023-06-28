@@ -83,12 +83,12 @@ void DXApplication::LoadPipeline(HWND hwnd)
 		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 		rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 		ThrowIfFailed(device_->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(rtvHeap_.ReleaseAndGetAddressOf())));
-		// シェーダーリソースビュー
-		D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-		srvHeapDesc.NumDescriptors = 1;
-		srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		ThrowIfFailed(device_->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(srvHeap_.ReleaseAndGetAddressOf())));
+		// 基本情報の受け渡し用
+		D3D12_DESCRIPTOR_HEAP_DESC basicHeapDesc = {};
+		basicHeapDesc.NumDescriptors = 2; // SRV + SBV
+		basicHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		basicHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		ThrowIfFailed(device_->CreateDescriptorHeap(&basicHeapDesc, IID_PPV_ARGS(basicHeap_.ReleaseAndGetAddressOf())));
 	}
 
 	// スワップチェーンと関連付けてレンダーターゲットビューを生成
@@ -115,10 +115,11 @@ void DXApplication::LoadAssets()
 	{
 		// ルートパラメータの生成
 		// ディスクリプタテーブルの実体
-		CD3DX12_DESCRIPTOR_RANGE1 discriptorRanges[1];
-		discriptorRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+		CD3DX12_DESCRIPTOR_RANGE1 discriptorRanges[2];
+		discriptorRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // CBV
+		discriptorRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // SRV
 		CD3DX12_ROOT_PARAMETER1 rootParameters[1];
-		rootParameters[0].InitAsDescriptorTable(1, &discriptorRanges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[0].InitAsDescriptorTable(2, discriptorRanges, D3D12_SHADER_VISIBILITY_ALL); // 同一パラメータで2つ指定
 		// サンプラーの生成
 		// テクスチャデータからどう色を取り出すかを決めるための設定
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
@@ -184,11 +185,12 @@ void DXApplication::LoadAssets()
 	// 頂点バッファビューの生成
 	{
 		// 頂点定義
+		// 600x400 で (50,100) の位置
 		Vertex vertices[] = {
-			{{-0.4f,-0.7f, 0.0f}, {0.0f, 1.0f}} , //左下
-			{{-0.4f, 0.7f, 0.0f}, {0.0f, 0.0f}} , //左上
-			{{ 0.4f,-0.7f, 0.0f}, {1.0f, 1.0f}} , //右下
-			{{ 0.4f, 0.7f, 0.0f}, {1.0f, 0.0f}} , //右上
+			{{  50.0f, 500.0f, 0.0f }, { 0.0f, 1.0f }} , //左下
+			{{  50.0f, 100.0f, 0.0f }, { 0.0f, 0.0f }} , //左上
+			{{ 650.0f, 500.0f, 0.0f }, { 1.0f, 1.0f }} , //右下
+			{{ 650.0f, 100.0f, 0.0f }, { 1.0f, 0.0f }} , //右上
 		};
 		const UINT vertexBufferSize = sizeof(vertices);
 		auto vertexHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -250,6 +252,41 @@ void DXApplication::LoadAssets()
 		ThrowIfFailed(PrepareUpload(device_.Get(), scratchImg.GetImages(), scratchImg.GetImageCount(), metadata, textureSubresources));
 	}
 
+	// ディスクリプタヒープもハンドルを事前に取得
+	auto basicHeapHandle = basicHeap_->GetCPUDescriptorHandleForHeapStart();
+	// 定数バッファービューの生成
+	{
+		// 2D座標の変換行列を生成
+		DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
+		matrix.r[0].m128_f32[0] = 2.0f / windowWidth_;
+		matrix.r[1].m128_f32[1] = -2.0f / windowHeight_;
+		matrix.r[3].m128_f32[0] = -1.0f;
+		matrix.r[3].m128_f32[1] = 1.0f;
+		// 定数バッファーの生成
+		auto constHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+		auto constDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(matrix) + 0xff) & ~0xff); // 256アライメントでサイズを指定
+		ThrowIfFailed(device_->CreateCommittedResource(
+			&constHeapProp,
+			D3D12_HEAP_FLAG_NONE,
+			&constDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(constBuffer_.ReleaseAndGetAddressOf())));
+		// TODO Mapした行列はUnMapせずに保持しておけば後で変更できる
+		// 定数情報のコピー
+		DirectX::XMMATRIX* mapMatrix;
+		constBuffer_->Map(0, nullptr, (void**)&mapMatrix);
+		*mapMatrix = matrix;
+		constBuffer_->Unmap(0, nullptr);
+		// 定数バッファービューの生成
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+		cbvDesc.BufferLocation = constBuffer_->GetGPUVirtualAddress();
+		cbvDesc.SizeInBytes = static_cast<UINT>(constBuffer_->GetDesc().Width);
+		device_->CreateConstantBufferView(&cbvDesc, basicHeapHandle);
+	}
+	// ハンドルのポインタをオフセットする
+	basicHeapHandle.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
 	// シェーダーリソースビューの生成
 	{
 		// テクスチャバッファの生成
@@ -277,7 +314,7 @@ void DXApplication::LoadAssets()
 		srvDesc.Format = textureDesc.Format;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 		srvDesc.Texture2D.MipLevels = 1;
-		device_->CreateShaderResourceView(textureBuffer_.Get(), &srvDesc, srvHeap_->GetCPUDescriptorHandleForHeapStart());
+		device_->CreateShaderResourceView(textureBuffer_.Get(), &srvDesc, basicHeapHandle);
 	}
 
 	// テクスチャアップロード用バッファの生成
@@ -352,9 +389,9 @@ void DXApplication::OnRender()
 		commandList_->RSSetScissorRects(1, &scissorrect_);            // シザー短形
 		// ディスクリプタテーブル
 		// ルートパラメータとディスクリプタヒープを紐づける
-		ID3D12DescriptorHeap* ppHeaps[] = { srvHeap_.Get() };
+		ID3D12DescriptorHeap* ppHeaps[] = { basicHeap_.Get() };
 		commandList_->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-		commandList_->SetGraphicsRootDescriptorTable(0, srvHeap_->GetGPUDescriptorHandleForHeapStart());
+		commandList_->SetGraphicsRootDescriptorTable(0, basicHeap_->GetGPUDescriptorHandleForHeapStart());
 
 		// レンダーターゲットの設定
 		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(rtvHeap_->GetCPUDescriptorHandleForHeapStart(), frameIndex, device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV));

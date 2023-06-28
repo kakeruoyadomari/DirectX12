@@ -48,7 +48,7 @@ private:
 	ComPtr<ID3D12CommandQueue> commandQueue_;
 	ComPtr<IDXGISwapChain4> swapchain_;
 	ComPtr<ID3D12DescriptorHeap> rtvHeap_;              // レンダーターゲットヒープ
-	ComPtr<ID3D12DescriptorHeap> srvHeap_;              // シェーダーリソースビューヒープ
+	ComPtr<ID3D12DescriptorHeap> basicHeap_;            // 基本情報の受け渡し用(SRV + CBV)
 	ComPtr<ID3D12Resource> renderTargets_[kFrameCount]; // バックバッファー
 	ComPtr<ID3D12PipelineState> pipelinestate_;         // パイプラインステート
 	ComPtr<ID3D12RootSignature> rootsignature_;         // ルートシグネチャ
@@ -58,6 +58,7 @@ private:
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView_;
 	ComPtr<ID3D12Resource> indexBuffer_;
 	D3D12_INDEX_BUFFER_VIEW indexBufferView_;
+	ComPtr<ID3D12Resource> constBuffer_;
 	ComPtr<ID3D12Resource> textureBuffer_;
 
 	struct Vertex
