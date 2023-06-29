@@ -185,12 +185,11 @@ void DXApplication::LoadAssets()
 	// 頂点バッファビューの生成
 	{
 		// 頂点定義
-		// 600x400 で (50,100) の位置
 		Vertex vertices[] = {
-			{{  50.0f, 500.0f, 0.0f }, { 0.0f, 1.0f }} , //左下
-			{{  50.0f, 100.0f, 0.0f }, { 0.0f, 0.0f }} , //左上
-			{{ 650.0f, 500.0f, 0.0f }, { 1.0f, 1.0f }} , //右下
-			{{ 650.0f, 100.0f, 0.0f }, { 1.0f, 0.0f }} , //右上
+			{{ -1.0f, -1.0f, 0.0f }, { 0.0f, 1.0f }} , //左下
+			{{ -1.0f,  1.0f, 0.0f }, { 0.0f, 0.0f }} , //左上
+			{{  1.0f, -1.0f, 0.0f }, { 1.0f, 1.0f }} , //右下
+			{{  1.0f,  1.0f, 0.0f }, { 1.0f, 0.0f }} , //右上
 		};
 		const UINT vertexBufferSize = sizeof(vertices);
 		auto vertexHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -256,15 +255,9 @@ void DXApplication::LoadAssets()
 	auto basicHeapHandle = basicHeap_->GetCPUDescriptorHandleForHeapStart();
 	// 定数バッファービューの生成
 	{
-		// 2D座標の変換行列を生成
-		DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
-		matrix.r[0].m128_f32[0] = 2.0f / windowWidth_;
-		matrix.r[1].m128_f32[1] = -2.0f / windowHeight_;
-		matrix.r[3].m128_f32[0] = -1.0f;
-		matrix.r[3].m128_f32[1] = 1.0f;
 		// 定数バッファーの生成
 		auto constHeapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-		auto constDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(matrix) + 0xff) & ~0xff); // 256アライメントでサイズを指定
+		auto constDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(DirectX::XMMATRIX) + 0xff) & ~0xff); // 256アライメントでサイズを指定
 		ThrowIfFailed(device_->CreateCommittedResource(
 			&constHeapProp,
 			D3D12_HEAP_FLAG_NONE,
@@ -272,17 +265,26 @@ void DXApplication::LoadAssets()
 			D3D12_RESOURCE_STATE_GENERIC_READ,
 			nullptr,
 			IID_PPV_ARGS(constBuffer_.ReleaseAndGetAddressOf())));
-		// TODO Mapした行列はUnMapせずに保持しておけば後で変更できる
-		// 定数情報のコピー
-		DirectX::XMMATRIX* mapMatrix;
-		constBuffer_->Map(0, nullptr, (void**)&mapMatrix);
-		*mapMatrix = matrix;
-		constBuffer_->Unmap(0, nullptr);
 		// 定数バッファービューの生成
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 		cbvDesc.BufferLocation = constBuffer_->GetGPUVirtualAddress();
 		cbvDesc.SizeInBytes = static_cast<UINT>(constBuffer_->GetDesc().Width);
 		device_->CreateConstantBufferView(&cbvDesc, basicHeapHandle);
+		// 3D座標用の行列を生成
+		worldMatrix_ = DirectX::XMMatrixRotationY(angle_ * (DirectX::XM_PI / 180.0f)) * DirectX::XMMatrixScaling(scale_, scale_, 1.0f);		DirectX::XMFLOAT3 eye(0, 0, -5);
+		DirectX::XMFLOAT3 target(0, 0, 0);
+		DirectX::XMFLOAT3 up(0, 1, 0);
+		viewMatrix_ = DirectX::XMMatrixLookAtLH(DirectX::XMLoadFloat3(&eye), DirectX::XMLoadFloat3(&target), DirectX::XMLoadFloat3(&up));
+		projMatrix_ = DirectX::XMMatrixPerspectiveFovLH(
+			DirectX::XM_PIDIV2, // 画角: 90度
+			static_cast<float>(windowWidth_) / static_cast<float>(windowHeight_), // アスペクト比
+			1.0f, // near
+			10.0f // far
+		);
+		// 定数情報のコピー
+		constBuffer_->Map(0, nullptr, (void**)&mapMatrix_);
+		*mapMatrix_ = worldMatrix_ * viewMatrix_ * projMatrix_;
+		constBuffer_->Unmap(0, nullptr);
 	}
 	// ハンドルのポインタをオフセットする
 	basicHeapHandle.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -362,6 +364,10 @@ void DXApplication::LoadAssets()
 // 更新処理
 void DXApplication::OnUpdate()
 {
+	// 回転させてみる
+	angle_ += 1.0f;
+	worldMatrix_ = worldMatrix_ = DirectX::XMMatrixRotationY(angle_ * (DirectX::XM_PI / 180.0f));
+	*mapMatrix_ = worldMatrix_ * viewMatrix_ * projMatrix_;
 }
 
 // 描画処理

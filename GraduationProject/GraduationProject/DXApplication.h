@@ -72,6 +72,15 @@ private:
 	UINT64 fenceValue_;
 	HANDLE fenceEvent_;
 
+	// 3D座標変換用行列
+	DirectX::XMMATRIX worldMatrix_;
+	DirectX::XMMATRIX viewMatrix_;
+	DirectX::XMMATRIX projMatrix_;
+	DirectX::XMMATRIX* mapMatrix_;
+	// オブジェクトのパラメータを想定(仮)
+	float angle_ = 30.0f; // 30度
+	float scale_ = 3.0f;
+
 	void LoadPipeline(HWND hwnd);
 	void LoadAssets();
 
