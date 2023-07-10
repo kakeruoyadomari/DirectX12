@@ -165,13 +165,23 @@ void DXApplication::LoadAssets()
 			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 		};
 
+
+		// 両面描画
+		auto rasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+		//表示面設定
+		//D3D12_CULL_MODE_NONE = 1,		両面
+		//D3D12_CULL_MODE_FRONT = 2,	裏面
+		//D3D12_CULL_MODE_BACK = 3		表面
+
 		// パイプラインステートオブジェクト(PSO)を生成
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 		psoDesc.pRootSignature = rootsignature_.Get();
 		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) }; // 入力レイアウトの設定
 		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob.Get());                       // 頂点シェーダ
 		psoDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob.Get());                       // ピクセルシェーダ
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);         // ラスタライザーステート
+		psoDesc.RasterizerState = rasterizerState;								  // ラスタライザーステート
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);                   // ブレンドステート
 		psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;                           // サンプルマスクの設定
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;   // トポロジタイプ
