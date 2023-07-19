@@ -10,6 +10,7 @@
 
 #include <stdexcept>
 #include <vector>
+#include "FbxLoader.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -81,9 +82,12 @@ private:
 	float angle_ = 30.0f; // 30“x
 	float scale_ = 3.0f;
 
+	FbxLoader::VertexInfo fbxVertexInfo_; // fbxƒ‚ƒfƒ‹‚©‚ç“Ç‚İ‚ñ‚¾’¸“_î•ñ
+
 	void LoadPipeline(HWND hwnd);
 	void LoadAssets();
 
 	void CreateD3D12Device(IDXGIFactory6* dxgiFactory, ID3D12Device** d3d12device);
 	void ThrowIfFailed(HRESULT hr);
+	void ThrowMessage(std::string message);
 };
