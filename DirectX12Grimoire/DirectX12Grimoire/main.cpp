@@ -19,6 +19,19 @@
 using namespace std;
 using namespace DirectX;
 
+
+struct Vertex
+{
+	XMFLOAT3 pos;//XYZ座標
+	XMFLOAT2 uv;//UV座標
+};
+
+//ノイズテクスチャの作成
+struct TexRGBA 
+{
+	unsigned char R, G, B, A;
+};
+
 //@brief コンソール画面にフォーマット付き文字列を表示
 //@param format フォーマット(%dや%f等の)
 //@param 可変長引数
@@ -241,12 +254,12 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	ShowWindow(hwnd, SW_SHOW);
 
 
-	XMFLOAT3 vertices[] = 
+	Vertex vertices[] =
 	{
-		{-0.4f,-0.7f,0.0f} ,//左下
-		{-0.4f,0.7f,0.0f} ,//左上
-		{0.4f,-0.7f,0.0f} ,//右下
-		{0.4f,0.7f,0.0f} ,//右上
+		{{-0.4f, -0.7f, 0.0f}, {0.0f, 1.0f}},	//左下
+		{{-0.4f,  0.7f, 0.0f}, {0.0f, 0.0f}},	//左上
+		{{ 0.4f, -0.7f, 0.0f}, {1.0f, 1.0f}},	//右下
+		{{ 0.4f,  0.7f, 0.0f}, {1.0f, 0.0f}},	//右上
 	};
 
 
@@ -280,7 +293,7 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	//
 
 	//頂点情報のコピー
-	XMFLOAT3* vertMap = nullptr;
+	Vertex* vertMap = nullptr;
 	result = vertBuff->Map(0, nullptr, (void**)&vertMap);
 
 	std::copy(std::begin(vertices), std::end(vertices), vertMap);
@@ -385,13 +398,27 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	//頂点レイアウト
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] =
 	{
-		{ "POSITION",
-		0,
-		DXGI_FORMAT_R32G32B32_FLOAT,
-		0,
-		D3D12_APPEND_ALIGNED_ELEMENT,
-		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-		0 },
+		//座標情報
+		{ 
+			"POSITION",
+			0,
+			DXGI_FORMAT_R32G32B32_FLOAT,
+			0,
+			D3D12_APPEND_ALIGNED_ELEMENT,
+			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			0
+		},
+
+		//uv情報
+		{
+			"TEXCOORD",
+			0,
+			DXGI_FORMAT_R32G32_FLOAT,
+			0,
+			D3D12_APPEND_ALIGNED_ELEMENT,
+			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			0
+		}
 	};
 
 
@@ -492,6 +519,71 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	scissorrect.left = 0;//切り抜き左座標
 	scissorrect.right = scissorrect.left + window_width;//切り抜き右座標
 	scissorrect.bottom = scissorrect.top + window_height;//切り抜き下座標
+
+
+	vector<TexRGBA> texturedata(256 * 256);
+	for (auto& rgba : texturedata) 
+	{
+		rgba.R = rand() % 256;
+		rgba.G = rand() % 256;
+		rgba.B = rand() % 256;
+		rgba.A = 255;//アルファは1.0という事にします。
+	}
+
+	//WriteToSubresourceで転送する用のヒープ設定
+	D3D12_HEAP_PROPERTIES texHeapProp = {};
+
+	texHeapProp.Type = D3D12_HEAP_TYPE_CUSTOM;		//DEFALLTでもUPLOADでもない
+	//ライトバック
+	texHeapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+	//転送はL0,つまりCPU側から行う
+	texHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+	//単一アダプターのため０
+	texHeapProp.CreationNodeMask = 0;
+	texHeapProp.VisibleNodeMask = 0;
+
+	resdesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;	//RGBAフォーマット
+	resdesc.Width = 256;	//幅
+	resdesc.Height = 256;	//高さ
+	resdesc.DepthOrArraySize = 1;	//2Dで配列でもないので１
+	resdesc.SampleDesc.Count = 1;	//アンチエイリアシングしない
+	resdesc.SampleDesc.Quality = 0;	//クオリティは最低
+	resdesc.MipLevels = 1;			//ミップマップしないのでミップ数は1つ
+	resdesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;	//2Dテクスチャ用
+	resdesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;	//レイアウトは決定しない
+	resdesc.Flags = D3D12_RESOURCE_FLAG_NONE;		//特にフラグ無し
+
+
+	//リソース生成
+	ID3D12Resource* texbuff = nullptr;
+
+	result = _dev->CreateCommittedResource(
+		&texHeapProp,
+		D3D12_HEAP_FLAG_NONE,
+		&resdesc,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,		//テクスチャ用指定
+		nullptr,
+		IID_PPV_ARGS(&texbuff));
+
+	//テクスチャバッファーの転送
+	result = texbuff->WriteToSubresource(
+		0,
+		nullptr,//全領域へコピー
+		texturedata.data(),//元データアドレス
+		sizeof(TexRGBA) * 256,//1ラインサイズ
+		sizeof(TexRGBA) * texturedata.size()//全サイズ
+	);
+
+
+	//シェーダーリソースビュー用のディスクリプタヒープ作成
+	ID3D12DescriptorHeap* texDescHeap = nullptr;
+	D3D12_DESCRIPTOR_HEAP_DESC descHeapDesc = {};
+
+	descHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;//シェーダから見えるように
+	descHeapDesc.NodeMask = 0;//マスクは0
+	descHeapDesc.NumDescriptors = 1;//ビューは今のところ１つだけ
+	descHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;//シェーダリソースビュー(および定数、UAVも)
+	result = _dev->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&texDescHeap));//生成
 
 
 	MSG msg = {};
