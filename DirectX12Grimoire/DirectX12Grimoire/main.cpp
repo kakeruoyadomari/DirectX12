@@ -474,11 +474,53 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	gpipeline.SampleDesc.Count = 1;//サンプリングは1ピクセルにつき１
 	gpipeline.SampleDesc.Quality = 0;//クオリティは最低
 
-	//ルートシグネチャ作成
+	//ルートシグネチャ
 	ID3D12RootSignature* rootsignature = nullptr;
 
+	//ディスクリプタレンジ作成
+	D3D12_DESCRIPTOR_RANGE descTblRange = {};
+
+	descTblRange.NumDescriptors = 1;		//テクスチャ１つ
+	descTblRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;	//種別はテクスチャ
+	descTblRange.BaseShaderRegister = 0;	//0番スロットから
+	descTblRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	//ルートパラメーター作成
+	D3D12_ROOT_PARAMETER rootparam = {};
+
+	rootparam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	//ピクセルシェーダーから見える
+	rootparam.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	//ディスクリプタレンジのアドレス
+	rootparam.DescriptorTable.pDescriptorRanges = &descTblRange;
+	//ディスクリプタレンジ数
+	rootparam.DescriptorTable.NumDescriptorRanges = 1;
+
+
+	//サンプラーの設定
+	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
+
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;		//横方向の繰り返し
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;		//縦方向の繰り返し
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;		//奥方向の繰り返し
+	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;	//ボーダーは黒
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;		//線形補間
+	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;						//ミップマップ最大値
+	samplerDesc.MinLOD = 0.0f;									//ミップマップ最小値
+	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;	//ピクセルシェーダーから見える
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;	//リサンプリングしない
+
+
+	//ルートシグネチャ作成
 	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+
 	rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+	rootSignatureDesc.pParameters = &rootparam;
+	rootSignatureDesc.NumParameters = 1;
+
+	rootSignatureDesc.pStaticSamplers = &samplerDesc;
+	rootSignatureDesc.NumStaticSamplers = 1;
+
 
 	ID3DBlob* rootSigBlob = nullptr;
 	result = D3D12SerializeRootSignature(
@@ -586,6 +628,23 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	result = _dev->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&texDescHeap));//生成
 
 
+	//シェーダーリソースビュー作成
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;	//rgba(0.0f～1.0fに正規化)
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;	//2Dテクスチャ
+	srvDesc.Texture2D.MipLevels = 1;		//ミップマップは使用しないので１
+
+
+	//生成
+	_dev->CreateShaderResourceView(
+		texbuff,		//ビューと関連付けるバッファー
+		&srvDesc,
+		texDescHeap->GetCPUDescriptorHandleForHeapStart()	//ヒープのどこに割り当てるか
+	);
+
+
 	MSG msg = {};
 	unsigned int frame = 0;
 	while (true)
@@ -645,6 +704,14 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		//頂点設定
 		_cmdList->IASetVertexBuffers(0, 1, &vbView);
 		_cmdList->IASetIndexBuffer(&ibView);
+
+
+		_cmdList->SetGraphicsRootSignature(rootsignature);
+		_cmdList->SetDescriptorHeaps(1, &texDescHeap);
+
+		_cmdList->SetGraphicsRootDescriptorTable(
+			0,		//ルートパラメーターインデックス
+			texDescHeap->GetGPUDescriptorHandleForHeapStart());		//ヒープアドレス
 
 		//描画命令
 		//_cmdList->DrawInstanced(3, 1, 0, 0);
