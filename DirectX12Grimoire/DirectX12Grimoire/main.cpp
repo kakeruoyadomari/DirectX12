@@ -30,6 +30,17 @@ struct Vertex
 };
 
 
+
+///アライメントに揃えたサイズを返す
+///@param size 元のサイズ
+///@param alignment アライメントサイズ
+///@return アライメントをそろえたサイズ
+size_t AlignmentedSize(size_t size, size_t alignment) 
+{
+	return size + alignment - size % alignment;
+}
+
+
 ////ノイズテクスチャの作成
 //struct TexRGBA 
 //{
@@ -597,32 +608,65 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	//	rgba.A = 255;//アルファは1.0という事にします。
 	//}
 
-	//WriteToSubresourceで転送する用のヒープ設定
-	D3D12_HEAP_PROPERTIES texHeapProp = {};
+	//中間バッファーとしてのアップロードヒープ設定
+	D3D12_HEAP_PROPERTIES uploadHeapProp = {};
 
-	texHeapProp.Type = D3D12_HEAP_TYPE_CUSTOM;		//DEFALLTでもUPLOADでもない
-	//ライトバック
-	texHeapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
-	//転送はL0,つまりCPU側から行う
-	texHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+	uploadHeapProp.Type = D3D12_HEAP_TYPE_UPLOAD;		//UPLOAD用
+	//アップロード用なのでUNKNOWN
+	uploadHeapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	uploadHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 	//単一アダプターのため0
-	texHeapProp.CreationNodeMask = 0;
-	texHeapProp.VisibleNodeMask = 0;
+	uploadHeapProp.CreationNodeMask = 0;
+	uploadHeapProp.VisibleNodeMask = 0;
 
 
 	D3D12_RESOURCE_DESC resDesc = {};
 
-	resDesc.Format = metadata.format;	//RGBAフォーマット		※srvDescのformatも同じもの
-	resDesc.Width = metadata.width;		//幅
-	resDesc.Height = metadata.height;	//高さ
-	resDesc.DepthOrArraySize = metadata.arraySize;
+	resDesc.Format = DXGI_FORMAT_UNKNOWN;	//データの塊なのでUNKNOWN		※srvDescのformatも同じもの
+	auto pixelsize = scratchImg.GetPixelsSize();
+	resDesc.Width = AlignmentedSize(img->rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) * img->height;//データサイズ 
+	resDesc.Height = 1;
+	resDesc.DepthOrArraySize = 1;
 	resDesc.SampleDesc.Count = 1;	//アンチエイリアシングしない
 	resDesc.SampleDesc.Quality = 0;	//クオリティは最低
-	resDesc.MipLevels = metadata.mipLevels;
+	resDesc.MipLevels = 1;
 	resDesc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);	//2Dテクスチャ用
-	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;	//レイアウトは決定しない
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;	//連続したデータ
 	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;		//特にフラグ無し
 
+
+	//アップロード用リソース
+	//中間バッファー作成
+	ID3D12Resource* uploadbuff = nullptr;
+
+	result = _dev->CreateCommittedResource(
+		&uploadHeapProp,
+		D3D12_HEAP_FLAG_NONE,	//特に指定なし
+		&resDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,		//CPUから書き込み可、GPU読み取り専用
+		nullptr,
+		IID_PPV_ARGS(&uploadbuff)
+	);
+
+
+	//テクスチャのためのヒープ設定
+	D3D12_HEAP_PROPERTIES texHeapProp = {};
+
+	texHeapProp.Type = D3D12_HEAP_TYPE_DEFAULT;		//テクスチャ用
+	texHeapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	texHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	texHeapProp.CreationNodeMask = 0;				//単一アダプターのため0
+	texHeapProp.VisibleNodeMask = 0;				//単一アダプターのため0
+
+
+	//リソース設定
+	resDesc.Format = metadata.format;
+	resDesc.Width = metadata.width;			//幅
+	resDesc.Height = metadata.height;		//高さ
+	resDesc.DepthOrArraySize = metadata.arraySize;
+	resDesc.MipLevels = metadata.mipLevels;
+	resDesc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 
 	//リソース生成
 	ID3D12Resource* texbuff = nullptr;
@@ -631,9 +675,55 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		&texHeapProp,
 		D3D12_HEAP_FLAG_NONE,
 		&resDesc,
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,		//テクスチャ用指定
+		D3D12_RESOURCE_STATE_COPY_DEST,		//テクスチャ用指定
 		nullptr,
 		IID_PPV_ARGS(&texbuff));
+
+
+	uint8_t* mapforImg = nullptr;		//image->pixelsと同じ型
+	result = uploadbuff->Map(0, nullptr, (void**)&mapforImg);	//マップ
+	auto srcAddress = img->pixels;
+	auto rowPitch = AlignmentedSize(img->rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+	for (int y = 0; y < img->height; ++y) 
+	{
+		copy_n(
+			srcAddress,
+			rowPitch,
+			mapforImg);//コピー
+		//1行ごとの辻褄を合わせてやる
+		srcAddress += img->rowPitch;
+		mapforImg += rowPitch;
+	}
+	uploadbuff->Unmap(0, nullptr);		//アンマップ
+
+
+	D3D12_TEXTURE_COPY_LOCATION src = {};		//コピー元
+	D3D12_TEXTURE_COPY_LOCATION dst = {};		//コピー先
+
+	src.pResource = uploadbuff;		//中間バッファー
+	src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;	//フットプリント設定
+
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
+	UINT nrow;
+	UINT64 rowsize, size;
+	auto desc = texbuff->GetDesc();
+	_dev->GetCopyableFootprints(&desc, 0, 1, 0, &footprint, &nrow, &rowsize, &size);
+
+	src.PlacedFootprint = footprint;
+
+	src.PlacedFootprint.Offset = 0;
+	src.PlacedFootprint.Footprint.Width = metadata.width;
+	src.PlacedFootprint.Footprint.Height = metadata.height;
+	src.PlacedFootprint.Footprint.Depth = metadata.depth;
+	src.PlacedFootprint.Footprint.RowPitch = AlignmentedSize(img->rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+	src.PlacedFootprint.Footprint.Format = img->format;
+
+	dst.pResource = texbuff;
+	dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	dst.SubresourceIndex = 0;
+
+	_cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+
 
 	//テクスチャバッファーの転送
 	result = texbuff->WriteToSubresource(
@@ -665,6 +755,35 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;	//2Dテクスチャ
 	srvDesc.Texture2D.MipLevels = 1;		//ミップマップは使用しないので１
+
+
+	D3D12_RESOURCE_BARRIER barrierDesc = {};
+	barrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	barrierDesc.Transition.pResource = texbuff;
+	barrierDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+	barrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+
+	_cmdList->ResourceBarrier(1, &barrierDesc);
+	_cmdList->Close();
+	//コマンドリストの実行
+	ID3D12CommandList* cmdlists[] = { _cmdList };
+	_cmdQueue->ExecuteCommandLists(1, cmdlists);
+
+	////待ち
+	_cmdQueue->Signal(_fence, ++_fenceVal);
+
+	if (_fence->GetCompletedValue() != _fenceVal) {
+		auto event = CreateEvent(nullptr, false, false, nullptr);
+		_fence->SetEventOnCompletion(_fenceVal, event);
+		WaitForSingleObject(event, INFINITE);
+		CloseHandle(event);
+	}
+	_cmdAllocator->Reset();//キューをクリア
+	_cmdList->Reset(_cmdAllocator, nullptr);
+
 
 
 	//生成
