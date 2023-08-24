@@ -7,6 +7,7 @@
 
 #include<d3dcompiler.h>
 #include<DirectXTex.h>
+#include<d3dx12.h>
 
 #ifdef _DEBUG
 #include <iostream>
@@ -275,33 +276,50 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 
 	//頂点バッファーの生成
-	D3D12_HEAP_PROPERTIES heapprop = {};
-	heapprop.Type = D3D12_HEAP_TYPE_UPLOAD;
-	heapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	heapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-	D3D12_RESOURCE_DESC resdesc = {};	
-	resdesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resdesc.Width = sizeof(vertices);
-	resdesc.Height = 1;
-	resdesc.DepthOrArraySize = 1;
-	resdesc.MipLevels = 1;
-	resdesc.Format = DXGI_FORMAT_UNKNOWN;
-	resdesc.SampleDesc.Count = 1;
-	resdesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	resdesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	//D3D12_HEAP_PROPERTIES heapprop = {};
+	//heapprop.Type = D3D12_HEAP_TYPE_UPLOAD;
+	//heapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	//heapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
 
-	//UPLOAD(確保は可能)
+	//D3D12_RESOURCE_DESC resdesc = {};	
+	//resdesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	//resdesc.Width = sizeof(vertices);
+	//resdesc.Height = 1;
+	//resdesc.DepthOrArraySize = 1;
+	//resdesc.MipLevels = 1;
+	//resdesc.Format = DXGI_FORMAT_UNKNOWN;
+	//resdesc.SampleDesc.Count = 1;
+	//resdesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	//resdesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+
+	////UPLOAD(確保は可能)
+	//ID3D12Resource* vertBuff = nullptr;
+	//result = _dev->CreateCommittedResource(
+	//	&heapprop,
+	//	D3D12_HEAP_FLAG_NONE,
+	//	&resdesc,
+	//	D3D12_RESOURCE_STATE_GENERIC_READ,
+	//	nullptr,
+	//	IID_PPV_ARGS(&vertBuff));
+	//
+	//D3DX12.hで省略可↓
+
+
 	ID3D12Resource* vertBuff = nullptr;
+
+	auto heapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	auto resDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices));
+
 	result = _dev->CreateCommittedResource(
-		&heapprop,
+		&heapProp,
 		D3D12_HEAP_FLAG_NONE,
-		&resdesc,
+		&resDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
-		IID_PPV_ARGS(&vertBuff));
-	//
+		IID_PPV_ARGS(&vertBuff)
+	);
 
 	//頂点情報のコピー
 	Vertex* vertMap = nullptr;
@@ -322,11 +340,13 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	ID3D12Resource* idxBuff = nullptr;
 	//設定は、バッファのサイズ以外頂点バッファの設定を使いまわして
 	//OKだと思います。
-	resdesc.Width = sizeof(indices);
+	heapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	resDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(indices));
+
 	result = _dev->CreateCommittedResource(
-		&heapprop,
+		&heapProp,
 		D3D12_HEAP_FLAG_NONE,
-		&resdesc,
+		&resDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&idxBuff));
@@ -488,24 +508,27 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	//ルートシグネチャ
 	ID3D12RootSignature* rootsignature = nullptr;
 
-	//ディスクリプタレンジ作成
-	D3D12_DESCRIPTOR_RANGE descTblRange = {};
+	//ディスクリプタレンジ作成	テクスチャと定数用の2つ
+	D3D12_DESCRIPTOR_RANGE descTblRange[2] = {};		//テクスチャと定数の２つ
 
-	descTblRange.NumDescriptors = 1;		//テクスチャ１つ
-	descTblRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;	//種別はテクスチャ
-	descTblRange.BaseShaderRegister = 0;	//0番スロットから
-	descTblRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	//テクスチャ用レジスター0番
+	descTblRange[0].NumDescriptors = 1;		//テクスチャ１つ
+	descTblRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;	//種別はテクスチャ
+	descTblRange[0].BaseShaderRegister = 0;	//0番スロットから
+	descTblRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	//定数用レジスター0番
+	descTblRange[1].NumDescriptors = 1;		//テクスチャ１つ
+	descTblRange[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;	//種別は定数
+	descTblRange[1].BaseShaderRegister = 0;	//0番スロットから
+	descTblRange[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	//ルートパラメーター作成
 	D3D12_ROOT_PARAMETER rootparam = {};
-
 	rootparam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	//ピクセルシェーダーから見える
-	rootparam.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	//ディスクリプタレンジのアドレス
-	rootparam.DescriptorTable.pDescriptorRanges = &descTblRange;
-	//ディスクリプタレンジ数
-	rootparam.DescriptorTable.NumDescriptorRanges = 1;
+	rootparam.DescriptorTable.pDescriptorRanges = &descTblRange[0];//デスクリプタレンジのアドレス
+	rootparam.DescriptorTable.NumDescriptorRanges = 2;//デスクリプタレンジ数
+	rootparam.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;//全てのシェーダから見える
 
 
 	//サンプラーの設定
@@ -610,7 +633,7 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	texHeapProp.VisibleNodeMask = 0;
 
 
-	D3D12_RESOURCE_DESC resDesc = {};
+	resDesc = {};
 
 	resDesc.Format = metadata.format;	//RGBAフォーマット		※srvDescのformatも同じもの
 	resDesc.Width = metadata.width;		//幅
@@ -645,17 +668,36 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	);
 
 
+	XMMATRIX matrix = XMMatrixIdentity();
+
+	ID3D12Resource* constBuff = nullptr;
+	heapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	resDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(XMMATRIX) + 0xff) & ~0xff);
+	
+	result = _dev->CreateCommittedResource(
+		&heapProp,
+		D3D12_HEAP_FLAG_NONE,
+		&resDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&constBuff)
+	);
+
+	XMMATRIX* mapMatrix;//マップ先を示すポインタ
+	result = constBuff->Map(0, nullptr, (void**)&mapMatrix);//マップ
+	*mapMatrix = matrix;
+
 	//シェーダーリソースビュー用のディスクリプタヒープ作成
-	ID3D12DescriptorHeap* texDescHeap = nullptr;
+	ID3D12DescriptorHeap* basicDescHeap = nullptr;
 	D3D12_DESCRIPTOR_HEAP_DESC descHeapDesc = {};
 
 	descHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;//シェーダから見えるように
 	descHeapDesc.NodeMask = 0;//マスクは0
-	descHeapDesc.NumDescriptors = 1;//ビューは今のところ１つだけ
+	descHeapDesc.NumDescriptors = 2;//SRVとCBV
 	descHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;//シェーダリソースビュー(および定数、UAVも)
 	result = _dev->CreateDescriptorHeap(
 		&descHeapDesc,
-		IID_PPV_ARGS(&texDescHeap));//生成
+		IID_PPV_ARGS(&basicDescHeap));//生成
 
 
 	//シェーダーリソースビュー作成
@@ -667,12 +709,23 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	srvDesc.Texture2D.MipLevels = 1;		//ミップマップは使用しないので１
 
 
-	//生成
+	auto basicHeapHandle = basicDescHeap->GetCPUDescriptorHandleForHeapStart();
+
+	//シェーダリソースビューの作成
 	_dev->CreateShaderResourceView(
-		texbuff,		//ビューと関連付けるバッファー
-		&srvDesc,
-		texDescHeap->GetCPUDescriptorHandleForHeapStart()	//ヒープのどこに割り当てるか
+		texbuff, //ビューと関連付けるバッファ
+		&srvDesc, //先ほど設定したテクスチャ設定情報
+		basicHeapHandle
 	);
+	basicHeapHandle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+
+	cbvDesc.BufferLocation = constBuff->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = static_cast<UINT>(constBuff->GetDesc().Width);
+	//定数バッファビューの作成
+	_dev->CreateConstantBufferView(&cbvDesc, basicHeapHandle);
 
 
 	MSG msg = {};
@@ -697,15 +750,22 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
 
 		//リソースバリア
-		D3D12_RESOURCE_BARRIER BarrierDesc = {};
-		BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		BarrierDesc.Transition.pResource = _backBuffers[bbIdx];
-		BarrierDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		_cmdList->ResourceBarrier(1, &BarrierDesc);		//バリア実行
-		//
+		//D3D12_RESOURCE_BARRIER BarrierDesc = {};
+		//BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		//BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		//BarrierDesc.Transition.pResource = _backBuffers[bbIdx];
+		//BarrierDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		//BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+		//BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+		//d3dx12.h でリソースバリアを以下に省略可↓
+
+		auto barrierDesc = CD3DX12_RESOURCE_BARRIER::Transition(
+			_backBuffers[bbIdx],
+			D3D12_RESOURCE_STATE_PRESENT,
+			D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+		_cmdList->ResourceBarrier(1, &barrierDesc);		//バリア実行
 
 		//パイプラインステート実行
 		_cmdList->SetPipelineState(_pipelinestate);
@@ -737,19 +797,25 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 
 		_cmdList->SetGraphicsRootSignature(rootsignature);
-		_cmdList->SetDescriptorHeaps(1, &texDescHeap);
+		_cmdList->SetDescriptorHeaps(1, &basicDescHeap);
 
 		_cmdList->SetGraphicsRootDescriptorTable(
 			0,		//ルートパラメーターインデックス
-			texDescHeap->GetGPUDescriptorHandleForHeapStart());		//ヒープアドレス
+			basicDescHeap->GetGPUDescriptorHandleForHeapStart());		//ヒープアドレス
 
 		//描画命令
 		//_cmdList->DrawInstanced(3, 1, 0, 0);
 		_cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
-		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-		_cmdList->ResourceBarrier(1, &BarrierDesc);
+		//barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		//barrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		//d3dx12で↓
+		barrierDesc = CD3DX12_RESOURCE_BARRIER::Transition(
+			_backBuffers[bbIdx],
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_PRESENT);
+
+		_cmdList->ResourceBarrier(1, &barrierDesc);
 
 		//命令のクローズ
 		_cmdList->Close();
