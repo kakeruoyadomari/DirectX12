@@ -255,6 +255,60 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	//
 
 
+	//深度バッファ作成
+	//深度バッファの仕様
+	D3D12_RESOURCE_DESC depthResDesc = {};
+	depthResDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;//2次元のテクスチャデータとして
+	depthResDesc.Width = window_width;//幅と高さはレンダーターゲットと同じ
+	depthResDesc.Height = window_height;//上に同じ
+	depthResDesc.DepthOrArraySize = 1;//テクスチャ配列でもないし3Dテクスチャでもない
+	depthResDesc.Format = DXGI_FORMAT_D32_FLOAT;//深度値書き込み用フォーマット
+	depthResDesc.SampleDesc.Count = 1;//サンプルは1ピクセル当たり1つ
+	depthResDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;//このバッファは深度ステンシルとして使用します
+	depthResDesc.MipLevels = 1;
+	depthResDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	depthResDesc.Alignment = 0;
+
+	//デプス用ヒーププロパティ
+	D3D12_HEAP_PROPERTIES depthHeapProp = {};
+	depthHeapProp.Type = D3D12_HEAP_TYPE_DEFAULT;//DEFAULTだから後はUNKNOWNでよし
+	depthHeapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	depthHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+	//このクリアバリューが重要な意味を持つ
+	D3D12_CLEAR_VALUE _depthClearValue = {};
+	_depthClearValue.DepthStencil.Depth = 1.0f;//深さ１(最大値)でクリア
+	_depthClearValue.Format = DXGI_FORMAT_D32_FLOAT;//32bit深度値としてクリア
+
+	ID3D12Resource* depthBuffer = nullptr;
+	result = _dev->CreateCommittedResource(
+		&depthHeapProp,
+		D3D12_HEAP_FLAG_NONE,
+		&depthResDesc,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE, //デプス書き込みに使用
+		&_depthClearValue,
+		IID_PPV_ARGS(&depthBuffer));
+
+	//深度のためのディスクリプタヒープ作成
+	D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};	//深度用
+	dsvHeapDesc.NumDescriptors = 1;	//深度ビューは１つ
+	dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;	//デプスステンシルビューとして使う
+	ID3D12DescriptorHeap* dsvHeap = nullptr;
+	result = _dev->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&dsvHeap));
+
+	//深度ビュー作成
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;	//深度値に32ビット使用
+	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;	//2Dテクスチャ
+	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;	//フラグなし
+
+	_dev->CreateDepthStencilView(
+		depthBuffer,
+		&dsvDesc,
+		dsvHeap->GetCPUDescriptorHandleForHeapStart()
+	);
+
+
 	//フェンス作成
 	ID3D12Fence* _fence = nullptr;
 	UINT64 _fenceVal = 0;
@@ -279,7 +333,9 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	auto err = fopen_s(&fp, "Model/初音ミク.pmd", "rb");
 	if (fp == nullptr)
 	{
-
+		char strerr[256];
+		strerror_s(strerr, 256, err);
+		//MessageBox(hwnd, strerr, "Open Error", MB_ICONERROR);
 		return -1;
 	}
 	fread(signature, sizeof(signature), 1, fp);
@@ -291,6 +347,13 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	std::vector<unsigned char> vertices(vertNum * pmdvertex_size);//バッファ確保
 	fread(vertices.data(), vertices.size(), 1, fp);
+
+	std::vector<unsigned short> indices;
+	unsigned int indicesNum;	//インデックス数
+	fread(&indicesNum, sizeof(indicesNum), 1, fp);
+
+	indices.resize(indicesNum);
+	fread(indices.data(), indices.size() * sizeof(indices[0]), 1, fp);
 
 	auto heapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	auto resDesc = CD3DX12_RESOURCE_DESC::Buffer(vertices.size());
@@ -388,13 +451,13 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	//vbView.StrideInBytes = sizeof(vertices[0]);//1頂点あたりのバイト数
 	//			↑モデル用に移動
 
-	unsigned short indices[] = { 0,1,2, 2,1,3 };
+	//unsigned short indices[] = { 0,1,2, 2,1,3 };
 
 	ID3D12Resource* idxBuff = nullptr;
 	//設定は、バッファのサイズ以外頂点バッファの設定を使いまわして
 	//OKだと思います。
 	heapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	resDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(indices));
+	resDesc = CD3DX12_RESOURCE_DESC::Buffer(indices.size() * sizeof(indices[0]));
 
 	result = _dev->CreateCommittedResource(
 		&heapProp,
@@ -414,7 +477,7 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	D3D12_INDEX_BUFFER_VIEW ibView = {};
 	ibView.BufferLocation = idxBuff->GetGPUVirtualAddress();
 	ibView.Format = DXGI_FORMAT_R16_UINT;
-	ibView.SizeInBytes = sizeof(indices);
+	ibView.SizeInBytes = indices.size() * sizeof(indices[0]);
 
 
 	//hlslファイル読込
@@ -581,6 +644,14 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	gpipeline.BlendState.AlphaToCoverageEnable = false;
 	gpipeline.BlendState.IndependentBlendEnable = false;
+
+
+	//深度
+	gpipeline.DepthStencilState.DepthEnable = true;		//深度バッファーを使う
+	gpipeline.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;	//ピクセル描画時に深度バッファーに深度値を書き込む
+	gpipeline.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;		//小さいほうを使用
+	gpipeline.DepthStencilState.StencilEnable = false;
+	gpipeline.DSVFormat = DXGI_FORMAT_D32_FLOAT;	//32ビットfloatを深度値として使用する
 
 	///
 	D3D12_RENDER_TARGET_BLEND_DESC renderTargetBlendDesc = {};
@@ -886,7 +957,7 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		}
 
 
-		angle += 0.1f;
+		//angle += 0.1f;
 		worldMat = XMMatrixRotationY(angle);
 		*mapMatrix = worldMat * viewMat * projMat;
 
@@ -918,7 +989,12 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		//レンダーターゲットを指定
 		auto rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
 		rtvH.ptr += static_cast<ULONG_PTR>(bbIdx * _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV));
-		_cmdList->OMSetRenderTargets(1, &rtvH, false, nullptr);
+
+		auto dsvH = dsvHeap->GetCPUDescriptorHandleForHeapStart();
+
+		_cmdList->OMSetRenderTargets(1, &rtvH, false, &dsvH);
+
+		_cmdList->ClearDepthStencilView(dsvH, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);	//深度値のクリア
 
 		//画面クリア
 		//float r, g, b;
@@ -938,7 +1014,8 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		_cmdList->SetGraphicsRootSignature(rootsignature);
 
 		//プリミティブ設定
-		_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+		_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		//_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 		//頂点設定
 		_cmdList->IASetVertexBuffers(0, 1, &vbView);
 		_cmdList->IASetIndexBuffer(&ibView);
@@ -952,8 +1029,8 @@ int WINAPI WinmMain(HINSTANCE, HINSTANCE, LPSTR, int)
 			basicDescHeap->GetGPUDescriptorHandleForHeapStart());		//ヒープアドレス
 
 		//描画命令
-		_cmdList->DrawInstanced(vertNum, 1, 0, 0);
-		_cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+		//_cmdList->DrawInstanced(vertNum, 1, 0, 0);
+		_cmdList->DrawIndexedInstanced(indicesNum, 1, 0, 0, 0);
 
 		//barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		//barrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
