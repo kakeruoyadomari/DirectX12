@@ -13,23 +13,58 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="PMD">
+      <UniqueIdentifier>{78ae4c08-908c-42b8-9cee-518f0b6464be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shader">
+      <UniqueIdentifier>{225e1f93-6be5-48e5-b47e-f12ece8b6505}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\PMD">
+      <UniqueIdentifier>{384da150-7eb9-4c6f-9ba0-ea4b3cfc7f23}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Application.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="Dx12Wrapper.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="PMDActor.cpp">
+      <Filter>PMD</Filter>
+    </ClCompile>
+    <ClCompile Include="PMDRenderer.cpp">
+      <Filter>PMD</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="BasicVertexShader.hlsl">
-      <Filter>ソース ファイル</Filter>
-    </FxCompile>
     <FxCompile Include="BasicPixelShader.hlsl">
-      <Filter>ソース ファイル</Filter>
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BasicVertexShader.hlsl">
+      <Filter>Shader</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="BasicType.hlsli">
-      <Filter>ソース ファイル</Filter>
+      <Filter>Shader</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Application.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Dx12Wrapper.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="PMDActor.h">
+      <Filter>ヘッダー ファイル\PMD</Filter>
+    </ClInclude>
+    <ClInclude Include="PMDRenderer.h">
+      <Filter>ヘッダー ファイル\PMD</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

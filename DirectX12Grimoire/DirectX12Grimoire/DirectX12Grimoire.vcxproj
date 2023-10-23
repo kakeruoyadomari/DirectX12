@@ -107,7 +107,7 @@
       <AdditionalIncludeDirectories>C:\Users\12105169\source\GitHub\DirectX12\DirectXTex-main\DirectXTex</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>C:\Users\12105169\source\GitHub\DirectX12\DirectXTex-main\DirectXTex\Bin\Desktop_2022_Win10\x64\Debug</AdditionalLibraryDirectories>
     </Link>
@@ -123,7 +123,7 @@
       <AdditionalIncludeDirectories>C:\Users\12105169\source\GitHub\DirectX12\DirectXTex-main\DirectXTex</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -131,7 +131,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Application.cpp" />
+    <ClCompile Include="Dx12Wrapper.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="PMDActor.cpp" />
+    <ClCompile Include="PMDRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="BasicPixelShader.hlsl">
@@ -157,6 +161,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="BasicType.hlsli" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Application.h" />
+    <ClInclude Include="Dx12Wrapper.h" />
+    <ClInclude Include="PMDActor.h" />
+    <ClInclude Include="PMDRenderer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
