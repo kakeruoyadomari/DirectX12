@@ -191,9 +191,9 @@ PMDActor::LoadPMDFile(const char* path) {
 
 	for (int i = 0; i < pmdMaterials.size(); ++i) {
 		//トゥーンリソースの読み込み
-		//char toonFilePath[32];
-		//sprintf(toonFilePath, "toon/toon%02d.bmp", pmdMaterials[i].toonIdx + 1);
-		//_toonResources[i] = _dx12.GetTextureByPath(toonFilePath);
+		char toonFilePath[32];
+		sprintf(toonFilePath, "toon/toon%02d.bmp", pmdMaterials[i].toonIdx + 1);
+		_toonResources[i] = _dx12.GetTextureByPath(toonFilePath);
 
 		if (strlen(pmdMaterials[i].texFilePath) == 0) {
 			_textureResources[i] = nullptr;
