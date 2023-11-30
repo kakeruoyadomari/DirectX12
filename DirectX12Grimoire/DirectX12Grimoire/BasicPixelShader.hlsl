@@ -1,5 +1,4 @@
 #include"BasicType.hlsli"
-
 Texture2D<float4> tex : register(t0); //0”ÔƒXƒƒbƒg‚Éİ’è‚³‚ê‚½ƒeƒNƒXƒ`ƒƒ(ƒx[ƒX)
 Texture2D<float4> sph : register(t1); //1”ÔƒXƒƒbƒg‚Éİ’è‚³‚ê‚½ƒeƒNƒXƒ`ƒƒ(æZ)
 Texture2D<float4> spa : register(t2); //2”ÔƒXƒƒbƒg‚Éİ’è‚³‚ê‚½ƒeƒNƒXƒ`ƒƒ(‰ÁZ)
@@ -7,7 +6,6 @@ Texture2D<float4> toon : register(t3); //3”ÔƒXƒƒbƒg‚Éİ’è‚³‚ê‚½ƒeƒNƒXƒ`ƒƒ(ƒgƒD
 
 SamplerState smp : register(s0); //0”ÔƒXƒƒbƒg‚Éİ’è‚³‚ê‚½ƒTƒ“ƒvƒ‰
 SamplerState smpToon : register(s1); //1”ÔƒXƒƒbƒg‚Éİ’è‚³‚ê‚½ƒTƒ“ƒvƒ‰
-
 
 //’è”ƒoƒbƒtƒ@1
 //ƒ}ƒeƒŠƒAƒ‹—p
@@ -17,8 +15,6 @@ cbuffer Material : register(b2)
     float4 specular; //ƒXƒyƒLƒ…ƒ‰
     float3 ambient; //ƒAƒ“ƒrƒGƒ“ƒg
 };
-
-
 
 
 float4 BasicPS(BasicType input) : SV_TARGET
@@ -33,18 +29,18 @@ float4 BasicPS(BasicType input) : SV_TARGET
 	//Œõ‚Ì”½ËƒxƒNƒgƒ‹
     float3 refLight = normalize(reflect(light, input.normal.xyz));
     float specularB = pow(saturate(dot(refLight, -input.ray)), specular.a);
-	
+
 	//ƒXƒtƒBƒAƒ}ƒbƒv—pUV
     float2 sphereMapUV = input.vnormal.xy;
     sphereMapUV = (sphereMapUV + float2(1, -1)) * float2(0.5, -0.5);
 
+    float4 ambCol = float4(ambient * 0.6, 1);
     float4 texColor = tex.Sample(smp, input.uv); //ƒeƒNƒXƒ`ƒƒƒJƒ‰[
-
-    return saturate(toonDif //‹P“x(ƒgƒD[ƒ“)
-		* diffuse //ƒfƒBƒtƒ…[ƒYF
+    return saturate((toonDif //‹P“x(ƒgƒD[ƒ“)
+		* diffuse + ambCol) //ƒfƒBƒtƒ…[ƒYF
 		* texColor //ƒeƒNƒXƒ`ƒƒƒJƒ‰[
-		* sph.Sample(smp, sphereMapUV)) //ƒXƒtƒBƒAƒ}ƒbƒv(æZ)
-		+ saturate(spa.Sample(smp, sphereMapUV) * texColor //ƒXƒtƒBƒAƒ}ƒbƒv(‰ÁZ)
-		+ float4(specularB * specular.rgb, 1)) //ƒXƒyƒLƒ…ƒ‰[
-		+ float4(texColor * ambient * 0.3, 1); //ƒAƒ“ƒrƒGƒ“ƒg(–¾‚é‚­‚È‚è‚·‚¬‚é‚Ì‚Å0.5‚É‚µ‚Ä‚Ü‚·)
+		* sph.Sample(smp, sphereMapUV) //ƒXƒtƒBƒAƒ}ƒbƒv(æZ)
+		+ spa.Sample(smp, sphereMapUV) //ƒXƒtƒBƒAƒ}ƒbƒv(‰ÁZ)
+		+ float4(specularB * specular.rgb, 1) //ƒXƒyƒLƒ…ƒ‰[
+		);
 }

@@ -2,12 +2,11 @@
 #include<d3d12.h>
 #include<dxgi1_6.h>
 #include<map>
-#include<memory>
-#include<unordered_map>
 #include<DirectXTex.h>
 #include<wrl.h>
 #include<string>
 #include<functional>
+#include<memory>
 
 class Dx12Wrapper
 {
@@ -71,7 +70,7 @@ class Dx12Wrapper
 	using LoadLambda_t = std::function<HRESULT(const std::wstring& path, DirectX::TexMetadata*, DirectX::ScratchImage&)>;
 	std::map < std::string, LoadLambda_t> _loadLambdaTable;
 	//テクスチャテーブル
-	std::unordered_map<std::string, ComPtr<ID3D12Resource>> _textureTable;
+	std::map<std::string, ComPtr<ID3D12Resource>> _textureTable;
 	//テクスチャローダテーブルの作成
 	void CreateTextureLoaderTable();
 	//テクスチャ名からテクスチャバッファ作成、中身をコピー
@@ -86,6 +85,7 @@ public:
 	void Update();
 	void BeginDraw();
 	void EndDraw();
+	void ExecuteCommand();
 	///テクスチャパスから必要なテクスチャバッファへのポインタを返す
 	///@param texpath テクスチャファイルパス
 	ComPtr<ID3D12Resource> GetTextureByPath(const char* texpath);
@@ -93,7 +93,6 @@ public:
 	ComPtr< ID3D12Device> Device();//デバイス
 	ComPtr < ID3D12GraphicsCommandList> CommandList();//コマンドリスト
 	ComPtr < IDXGISwapChain4> Swapchain();//スワップチェイン
-
 	void SetScene();
 
 };

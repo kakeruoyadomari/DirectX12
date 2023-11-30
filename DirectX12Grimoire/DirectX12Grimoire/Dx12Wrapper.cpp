@@ -383,6 +383,7 @@ HRESULT
 Dx12Wrapper::CreateSceneView() {
 	DXGI_SWAP_CHAIN_DESC1 desc = {};
 	auto result = _swapchain->GetDesc1(&desc);
+
 	auto heapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	auto resDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(SceneData) + 0xff) & ~0xff);
 	//定数バッファ作成
@@ -403,8 +404,8 @@ Dx12Wrapper::CreateSceneView() {
 	_mappedSceneData = nullptr;//マップ先を示すポインタ
 	result = _sceneConstBuff->Map(0, nullptr, (void**)&_mappedSceneData);//マップ
 
-	XMFLOAT3 eye(0, 15, -15);
-	XMFLOAT3 target(0, 15, 0);
+	XMFLOAT3 eye(0, 15, -30);
+	XMFLOAT3 target(0, 10, 0);
 	XMFLOAT3 up(0, 1, 0);
 	_mappedSceneData->view = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 	_mappedSceneData->proj = XMMatrixPerspectiveFovLH(XM_PIDIV4,//画角は45°
@@ -493,8 +494,8 @@ Dx12Wrapper::BeginDraw() {
 	auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
 	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(_backBuffers[bbIdx],
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	_cmdList->ResourceBarrier(1, &barrier);
 
+	_cmdList->ResourceBarrier(1, &barrier);
 
 	//レンダーターゲットを指定
 	auto rtvH = _rtvHeaps->GetCPUDescriptorHandleForHeapStart();
@@ -507,7 +508,7 @@ Dx12Wrapper::BeginDraw() {
 
 
 	//画面クリア
-	float clearColor[] = { 1.0f,0.0f,1.0f,1.0f };//白色
+	float clearColor[] = { 0.5f,0.5f,0.5f,1.0f };//白色
 	_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
 
 	//ビューポート、シザー矩形のセット
@@ -529,18 +530,18 @@ Dx12Wrapper::SetScene() {
 void
 Dx12Wrapper::EndDraw() {
 	auto bbIdx = _swapchain->GetCurrentBackBufferIndex();
-
 	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(_backBuffers[bbIdx],
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	_cmdList->ResourceBarrier(1, &barrier);
 
-	_cmdList->ResourceBarrier(1,
-		&barrier);
+	ExecuteCommand();
+}
+
+void Dx12Wrapper::ExecuteCommand()
+{
 
 	//命令のクローズ
 	_cmdList->Close();
-
-
-
 	//コマンドリストの実行
 	ID3D12CommandList* cmdlists[] = { _cmdList.Get() };
 	_cmdQueue->ExecuteCommandLists(1, cmdlists);

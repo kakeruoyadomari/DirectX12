@@ -3,8 +3,10 @@
 #include<d3d12.h>
 #include<DirectXMath.h>
 #include<vector>
-#include<string>
+#include<map>
+#include<unordered_map>
 #include<wrl.h>
+#include<string>
 
 class Dx12Wrapper;
 class PMDRenderer;
@@ -55,7 +57,7 @@ private:
 	};
 
 	Transform _transform;
-	Transform* _mappedTransform = nullptr;
+	DirectX::XMMATRIX* _mappedMatrices = nullptr;
 	ComPtr<ID3D12Resource> _transformBuff = nullptr;
 
 	//マテリアル関連
@@ -65,6 +67,17 @@ private:
 	std::vector<ComPtr<ID3D12Resource>> _sphResources;
 	std::vector<ComPtr<ID3D12Resource>> _spaResources;
 	std::vector<ComPtr<ID3D12Resource>> _toonResources;
+
+	//ボーン関連
+	std::vector<DirectX::XMMATRIX> _boneMatrices;
+
+	struct BoneNode {
+		int boneIdx;//ボーンインデックス
+		DirectX::XMFLOAT3 startPos;//ボーン基準点(回転中心)
+		std::vector<BoneNode*> children;//子ノード
+	};
+	std::map<std::string, BoneNode> _boneNodeTable;
+
 
 	//読み込んだマテリアルをもとにマテリアルバッファを作成
 	HRESULT CreateMaterialData();
@@ -78,15 +91,41 @@ private:
 
 	//PMDファイルのロード
 	HRESULT LoadPMDFile(const char* path);
-
+	void RecursiveMatrixMultipy(BoneNode* node, const DirectX::XMMATRIX& mat);
 	float _angle;//テスト用Y軸回転
+
+
+	///キーフレーム構造体
+	struct KeyFrame {
+		unsigned int frameNo;//フレーム№(アニメーション開始からの経過時間)
+		DirectX::XMVECTOR quaternion;//クォータニオン
+		DirectX::XMFLOAT2 p1, p2;//ベジェの中間コントロールポイント
+		KeyFrame(
+			unsigned int fno,
+			const DirectX::XMVECTOR& q,
+			const DirectX::XMFLOAT2& ip1,
+			const DirectX::XMFLOAT2& ip2) :
+			frameNo(fno),
+			quaternion(q),
+			p1(ip1),
+			p2(ip2) {}
+	};
+	std::unordered_map<std::string, std::vector<KeyFrame>> _motiondata;
+
+	float GetYFromXOnBezier(float x, const DirectX::XMFLOAT2& a, const DirectX::XMFLOAT2& b, uint8_t n = 12);
+
+	DWORD _startTime;//アニメーション開始時点のミリ秒時刻
+
+	void MotionUpdate();
+
 public:
 	PMDActor(const char* filepath, PMDRenderer& renderer);
 	~PMDActor();
 	///クローンは頂点およびマテリアルは共通のバッファを見るようにする
 	PMDActor* Clone();
+	void LoadVMDFile(const char* filepath, const char* name);
 	void Update();
 	void Draw();
-
+	void PlayAnimation();
 };
 
