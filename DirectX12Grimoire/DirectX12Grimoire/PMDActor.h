@@ -1,131 +1,155 @@
 #pragma once
 
-#include<d3d12.h>
-#include<DirectXMath.h>
 #include<vector>
+#include<array>
+#include<string>
+#include<DirectXMath.h>
+#include<d3d12.h>
+#include<wrl.h>
 #include<map>
 #include<unordered_map>
-#include<wrl.h>
-#include<string>
+#include<memory>
 
+using Microsoft::WRL::ComPtr;
 class Dx12Wrapper;
-class PMDRenderer;
-class PMDActor
-{
-	friend PMDRenderer;
-private:
-	PMDRenderer& _renderer;
-	Dx12Wrapper& _dx12;
-	template<typename T>
-	using ComPtr = Microsoft::WRL::ComPtr<T>;
-
-	//頂点関連
-	ComPtr<ID3D12Resource> _vb = nullptr;
-	ComPtr<ID3D12Resource> _ib = nullptr;
-	D3D12_VERTEX_BUFFER_VIEW _vbView = {};
-	D3D12_INDEX_BUFFER_VIEW _ibView = {};
-
-	ComPtr<ID3D12Resource> _transformMat = nullptr;//座標変換行列(今はワールドのみ)
-	ComPtr<ID3D12DescriptorHeap> _transformHeap = nullptr;//座標変換ヒープ
-
-	//シェーダ側に投げられるマテリアルデータ
-	struct MaterialForHlsl {
-		DirectX::XMFLOAT3 diffuse; //ディフューズ色
-		float alpha; // ディフューズα
-		DirectX::XMFLOAT3 specular; //スペキュラ色
-		float specularity;//スペキュラの強さ(乗算値)
-		DirectX::XMFLOAT3 ambient; //アンビエント色
-	};
-	//それ以外のマテリアルデータ
-	struct AdditionalMaterial {
-		std::string texPath;//テクスチャファイルパス
-		int toonIdx; //トゥーン番号
-		bool edgeFlg;//マテリアル毎の輪郭線フラグ
-	};
-	//まとめたもの
-	struct Material {
-		unsigned int indicesNum;//インデックス数
-		MaterialForHlsl material;
-		AdditionalMaterial additional;
-	};
-
-	struct Transform {
-		//内部に持ってるXMMATRIXメンバが16バイトアライメントであるため
-		//Transformをnewする際には16バイト境界に確保する
-		void* operator new(size_t size);
-		DirectX::XMMATRIX world;
-	};
-
-	Transform _transform;
-	DirectX::XMMATRIX* _mappedMatrices = nullptr;
-	ComPtr<ID3D12Resource> _transformBuff = nullptr;
-
-	//マテリアル関連
-	std::vector<Material> _materials;
-	ComPtr<ID3D12Resource> _materialBuff = nullptr;
-	std::vector<ComPtr<ID3D12Resource>> _textureResources;
-	std::vector<ComPtr<ID3D12Resource>> _sphResources;
-	std::vector<ComPtr<ID3D12Resource>> _spaResources;
-	std::vector<ComPtr<ID3D12Resource>> _toonResources;
-
-	//ボーン関連
-	std::vector<DirectX::XMMATRIX> _boneMatrices;
-
-	struct BoneNode {
-		int boneIdx;//ボーンインデックス
-		DirectX::XMFLOAT3 startPos;//ボーン基準点(回転中心)
-		std::vector<BoneNode*> children;//子ノード
-	};
-	std::map<std::string, BoneNode> _boneNodeTable;
-
-
-	//読み込んだマテリアルをもとにマテリアルバッファを作成
-	HRESULT CreateMaterialData();
-
-	ComPtr< ID3D12DescriptorHeap> _materialHeap = nullptr;//マテリアルヒープ(5個ぶん)
-	//マテリアル＆テクスチャのビューを作成
-	HRESULT CreateMaterialAndTextureView();
-
-	//座標変換用ビューの生成
-	HRESULT CreateTransformView();
-
-	//PMDファイルのロード
-	HRESULT LoadPMDFile(const char* path);
-	void RecursiveMatrixMultipy(BoneNode* node, const DirectX::XMMATRIX& mat);
-	float _angle;//テスト用Y軸回転
-
-
-	///キーフレーム構造体
-	struct KeyFrame {
-		unsigned int frameNo;//フレーム№(アニメーション開始からの経過時間)
-		DirectX::XMVECTOR quaternion;//クォータニオン
-		DirectX::XMFLOAT2 p1, p2;//ベジェの中間コントロールポイント
-		KeyFrame(
-			unsigned int fno,
-			const DirectX::XMVECTOR& q,
-			const DirectX::XMFLOAT2& ip1,
-			const DirectX::XMFLOAT2& ip2) :
-			frameNo(fno),
-			quaternion(q),
-			p1(ip1),
-			p2(ip2) {}
-	};
-	std::unordered_map<std::string, std::vector<KeyFrame>> _motiondata;
-
-	float GetYFromXOnBezier(float x, const DirectX::XMFLOAT2& a, const DirectX::XMFLOAT2& b, uint8_t n = 12);
-
-	DWORD _startTime;//アニメーション開始時点のミリ秒時刻
-
-	void MotionUpdate();
-
-public:
-	PMDActor(const char* filepath, PMDRenderer& renderer);
-	~PMDActor();
-	///クローンは頂点およびマテリアルは共通のバッファを見るようにする
-	PMDActor* Clone();
-	void LoadVMDFile(const char* filepath, const char* name);
-	void Update();
-	void Draw();
-	void PlayAnimation();
+struct Material {
+	DirectX::XMFLOAT4 diffuse;//ディフューズ色
+	float power;//スペキュラ強さ
+	DirectX::XMFLOAT3 specular;//スペキュラ色
+	DirectX::XMFLOAT3 ambient;//環境色
+	uint32_t indicesNum;//インデックス数
 };
 
+struct MultiTexturePath {
+	std::string texPath;//通常テクスチャパス
+	std::string sphPath;//乗算テクスチャパス
+	std::string spaPath;//加算テクスチャパス
+
+	std::string toonPath;//トゥーンテクスチャパス
+
+};
+
+class PMDActor
+{
+private:
+	//モーション情報
+	struct KeyFrame {
+		uint32_t frameNo;//キーフレームがある経過フレーム数
+		DirectX::XMFLOAT4 quaternion;//そのときどれくらい回転させるのか
+		DirectX::XMFLOAT3 offset;//元の位置からのオフセット
+		std::array<DirectX::XMFLOAT2, 2> cpnt;//コントロールポイント
+		KeyFrame() {}
+		KeyFrame(uint32_t fno, DirectX::XMFLOAT4& q, DirectX::XMFLOAT3& ofst, float cx1, float cy1, float cx2, float cy2) :frameNo(fno),
+			quaternion(q),
+			offset(ofst) {
+			cpnt[0].x = cx1;
+			cpnt[0].y = cy1;
+			cpnt[1].x = cx2;
+			cpnt[1].y = cy2;
+		}
+	};
+	std::unordered_map<std::string, std::vector<KeyFrame>> _keyframes;
+	uint32_t _duration;//アニメーションの総フレーム数
+
+	std::vector<uint32_t> _eyeBoneIdxes;
+
+	//ロード等の処理が終わってアニメーションを開始した時点での
+	//TickCount←PC起動時からのミリ秒
+	uint32_t _lastTickCount;
+
+	//現在の経過フレーム数に従って
+	//ボーン行列を更新する
+	void UpdateMotion(uint32_t frame);
+
+	//ボーンの情報
+	struct BoneInfo {
+		int index;//自分のインデックス
+		DirectX::XMFLOAT3 pos;//ボーン中心座標
+		BoneInfo(int idx, DirectX::XMFLOAT3& inpos) :index(idx), pos(inpos) {}
+		BoneInfo() :index(0), pos(DirectX::XMFLOAT3()) {}
+	};
+	std::vector<BoneInfo*> _boneAddressArray;
+	std::map<std::string, BoneInfo> _boneTable;
+	std::vector<DirectX::XMMATRIX> _boneMatrices;//最終的にグラボに渡すデータ
+	std::vector< std::vector<int> > _boneTree;//ボーンツリー
+	ComPtr<ID3D12Resource> _bonesBuff;//ボーン配列用バッファ
+	DirectX::XMMATRIX* _mappedBoneMatrix;
+	bool CreateBoneBuffer();
+
+	DirectX::XMFLOAT3 _rotator;
+	DirectX::XMFLOAT3 _pos;
+
+	unsigned int _vertNum;
+	unsigned int _indexNum;
+
+	std::vector<uint8_t> _vertexData;// 頂点データ
+	std::vector<uint16_t> _indexData;// インデックスデータ
+	std::vector<Material> _materials;// マテリアルデータ
+	std::vector<MultiTexturePath> _texturePaths;//テクスチャの相対パス
+	bool LoadFromPMD(const char* filepath);
+
+	ComPtr<ID3D12Resource> _vertexBuff;//頂点バッファ
+	ComPtr<ID3D12Resource> _indexBuff;//インデックスバッファ
+	ComPtr<ID3D12Resource> _materialBuff;//マテリアルバッファ
+	struct CompositeTexture {
+		ComPtr<ID3D12Resource> tex;//通常
+		ComPtr<ID3D12Resource> sph;//乗算スフィアマップ
+		ComPtr<ID3D12Resource> spa;//加算スフィアマップ
+		ComPtr<ID3D12Resource> toon;//トゥーン
+	};
+	std::vector<CompositeTexture> _texBuff;//テクスチャバッファ(通常/SPH/SPA/TOON)
+
+	//ビュー
+	D3D12_VERTEX_BUFFER_VIEW _vbView;//頂点バッファ
+	D3D12_INDEX_BUFFER_VIEW _ibView;//インデックスバッファ
+	ComPtr<ID3D12DescriptorHeap> _materialHeap;//マテリアルひとまとめ(テクスチャも含む)
+
+	//バッファ作る関数
+	bool CreateVertexBufferAndView();
+	bool CreateIndexBufferAndView();
+	bool CreateMaterialBuffer();
+	//テクスチャロード
+	bool LoadTexture();
+	//マテリアルバッファビュー
+	bool CreateMaterialBufferView();
+	std::shared_ptr<Dx12Wrapper> _dx;
+
+
+	ComPtr < ID3D12Resource> _transformCB;//プレイヤー移動定数バッファ
+	ComPtr < ID3D12DescriptorHeap> _transformHeap;//座標変換CBVヒープ
+	bool CreateTransformBuffer();
+	bool CreateTransformBufferView();
+
+	DirectX::XMMATRIX* _mappedTransform;//
+
+
+	void RecursiveBoneTransform(int idx, const DirectX::XMMATRIX& mat);
+
+public:
+	PMDActor(std::shared_ptr<Dx12Wrapper> dx, const char* path);
+	~PMDActor();
+
+	void LoadVMDData(const char* vmdpath);
+
+	const D3D12_VERTEX_BUFFER_VIEW& GetVertexBufferView()const;
+	const D3D12_INDEX_BUFFER_VIEW& GetIndexBufferView()const;
+
+	ComPtr<ID3D12Resource> GetMaterialBuffer();
+	unsigned int GetMaterialNum()const;
+	ComPtr<ID3D12DescriptorHeap> GetMaterialAndTextureView();
+
+
+	std::vector<Material>& Materials();
+
+	std::vector<MultiTexturePath>& GetTexturePaths();
+
+	void Move(float x, float y, float z);
+	void Rotate(float x, float y, float z);
+
+	const DirectX::XMFLOAT3& GetPosition()const;
+	const DirectX::XMFLOAT3& GetRotate()const;
+	void Update();
+	void Draw(bool isShadow = false);
+	void StartAmimation();
+
+};
