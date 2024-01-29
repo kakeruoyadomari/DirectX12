@@ -97,7 +97,6 @@ private:
 		DirectX::XMFLOAT4 lightVec;//ライトベクトル
 		DirectX::XMFLOAT3 eye;//視点
 		bool isSelfShadow;//シャドウマップフラグ
-		bool isToon;//トゥーンフラグ
 	};
 
 
@@ -112,7 +111,6 @@ private:
 	float _fov = DirectX::XM_PI / 6;
 	DirectX::XMFLOAT3 _lightVec;
 	bool _isSelfShadow;
-	bool _isToon;
 
 	bool CreateCommandList();
 	void Barrier(ID3D12Resource* p,
@@ -259,7 +257,6 @@ public:
 	void SetDebugDisplay(bool flg);///デバッグ表示のON / OFF
 	void SetSSAO(bool flg);///アンビエントオクルージョンのON / OFF
 	void SetSelfShadow(bool flg);///セルフシャドウON / OFF
-	void SetToon(bool flg);///トゥーンON / OFF
 	void SetLightVector(float vec[3]);///光線ベクトル(xyzベクトル)
 	void SetBackColor(float col[4]);///背景色の変更
 	void SetBloomColor(float col[3]);///ブルームの色付け

@@ -101,9 +101,14 @@ Application::Initialize() {
 
 	_pmdRenderer->Init();
 	_actor.reset(new PMDActor(_dx12, "Model/初音ミクmetal.pmd"));
-	//_actor->LoadVMDData("motion/yagokoro.vmd");
-	_actor->Move(-10, 0, 10);
+	_actor->LoadVMDData("motion/charge.vmd");
+	_actor->Move(0, 0, 10);
 	_pmdRenderer->AddActor(_actor);
+
+	//auto mikutoon = std::make_shared<PMDActor>(_dx12, "Model/初音ミク.pmd", false);
+	////_actor->LoadVMDData("motion/yagokoro.vmd");
+	//mikutoon->Move(10, 0, 0);
+	//_pmdRenderer->AddActor(mikutoon);
 
 	//auto miku=make_shared<PMDActor>(_dx12, "Model/初音ミク.pmd");
 	//miku->LoadVMDData("motion/yagokoro.vmd");
@@ -196,6 +201,12 @@ Application::Run() {
 			_actor->Rotate(0, 0, 0.01f);
 		}
 
+		if (keycode['K'] & 0x80) {
+			//_actor->~PMDActor();
+			//_actor.reset(new PMDActor(_dx12, "Model/初音ミク.pmd", 0));
+			//_actor->Move(-10, 0, 10);
+			//_pmdRenderer->AddActor(_actor);
+		}
 
 		_actor->Move(px, py, pz);
 
@@ -266,8 +277,6 @@ Application::Run() {
 		_dx12->SetDebugDisplay(blnDebugDisp);
 		_dx12->SetSSAO(blnSSAO);
 		_dx12->SetSelfShadow(blnShadowmap);
-		_dx12->SetToon(blnToon);
-
 		_dx12->SetBackColor(bgCol);
 		_dx12->SetBloomColor(bloomCol);
 

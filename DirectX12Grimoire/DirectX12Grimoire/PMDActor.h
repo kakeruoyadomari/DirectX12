@@ -97,6 +97,9 @@ private:
 		ComPtr<ID3D12Resource> spa;//加算スフィアマップ
 		ComPtr<ID3D12Resource> toon;//トゥーン
 	};
+
+	bool _toonFlg;
+
 	std::vector<CompositeTexture> _texBuff;//テクスチャバッファ(通常/SPH/SPA/TOON)
 
 	//ビュー

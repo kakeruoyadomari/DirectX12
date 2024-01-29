@@ -152,8 +152,7 @@ _eye(0, 15, -25),
 _target(0, 10, 0),
 _up(0, 1, 0),
 _lightVec(1, -1, 1),
-_isSelfShadow(false),
-_isToon(false)
+_isSelfShadow(false)
 {
 
 
@@ -1224,7 +1223,6 @@ void Dx12Wrapper::SetCameraSetting()
 	_mappedScene->lightVec.y = _lightVec.y;
 	_mappedScene->lightVec.z = _lightVec.z;
 	_mappedScene->isSelfShadow = _isSelfShadow;
-	_mappedScene->isToon = _isToon;
 
 	XMVECTOR lightVec = -XMLoadFloat3(&_lightVec);
 	_mappedScene->shadow = XMMatrixShadow(planeVec, lightVec);
@@ -1242,8 +1240,8 @@ Dx12Wrapper::CreatePrimitives() {
 
 
 	constexpr XMFLOAT3 center(0, 0, 0);
-	constexpr float width = 40.0f;
-	constexpr float height = 40.0f;
+	constexpr float width = 100.0f;
+	constexpr float height = 100.0f;
 
 	PrimitiveVertex plane[4] = {
 		{{center.x - width / 2.0f, center.y,center.z - height / 2.0f},{0,1,0}},
@@ -2215,11 +2213,6 @@ Dx12Wrapper::SetSSAO(bool flg) {
 void
 Dx12Wrapper::SetSelfShadow(bool flg) {
 	_isSelfShadow = flg;
-}
-
-void Dx12Wrapper::SetToon(bool flg)
-{
-	_isToon = flg;
 }
 
 void

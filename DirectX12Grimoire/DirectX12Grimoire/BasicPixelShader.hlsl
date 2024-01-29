@@ -31,7 +31,6 @@ cbuffer SceneBuffer : register(b1)
     float4 lightVec; //ライトベクトル
     float3 eye; //視点
     bool isSelfShadow; //シャドウマップフラグ
-    bool isToon;
 };
 
 float4 PrimitivePS(PrimitiveType input) : SV_TARGET

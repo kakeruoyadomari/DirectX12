@@ -283,7 +283,7 @@ PMDActor::RecursiveBoneTransform(int idx, const DirectX::XMMATRIX& mat) {
 	}
 }
 
-PMDActor::PMDActor(shared_ptr<Dx12Wrapper> dx, const char* path) :_dx(dx), _pos(0, 0, 0), _rotator(0, 0, 0)
+PMDActor::PMDActor(shared_ptr<Dx12Wrapper> dx, const char* path) :_dx(dx), _toonFlg(true), _pos(0, 0, 0), _rotator(0, 0, 0)
 {
 	LoadFromPMD(path);
 	if (!CreateVertexBufferAndView()) {
@@ -582,9 +582,12 @@ PMDActor::LoadTexture() {
 			ret = _dx->LoadPictureFromFile(WStringFromString(_texturePaths[i].spaPath), _texBuff[i].spa);
 			if (!ret)return ret;
 		}
-		if (_texturePaths[i].toonPath != "") {
-			ret = _dx->LoadPictureFromFile(WStringFromString(_texturePaths[i].toonPath), _texBuff[i].toon);
-			if (!ret)return ret;
+		if (_toonFlg != false)
+		{
+			if (_texturePaths[i].toonPath != "") {
+				ret = _dx->LoadPictureFromFile(WStringFromString(_texturePaths[i].toonPath), _texBuff[i].toon);
+				if (!ret)return ret;
+			}
 		}
 	}
 	return true;
